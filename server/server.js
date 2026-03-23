@@ -5,25 +5,56 @@ import OpenAI from 'openai';
 dotenv.config();
 
 // Crear un objecte per fer les consultes
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ baseURL: 'https://models.github.ai/inference', apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
 const PORT = 3000;
+let systemInfo = ''; // Variable para guardar la información del sistema
+
 // Middleware per convertir JSON
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
+
+// Ruta para guardar la información del sistema
+app.post('/system-info', (req, res) => {
+    const { systemInfo: newSystemInfo } = req.body;
+    if (!newSystemInfo) {
+        return res.status(400).json({ error: 'Información del sistema vacía' });
+    }
+    systemInfo = newSystemInfo;
+    res.json({ mensaje: 'Información del sistema guardada' });
+});
 
 app.post('/consulta', async (req, res) => {
     const { pregunta } = req.body;
 
     try {
         // Realitzar la consulta, esperar la resposta i guardar-la a 'resposta'
+        const systemMessage = systemInfo
+            ? `Eres un asistente especializado en información geográfica y ubicaciones. Puedes responder preguntas sobre:
+- Coordenadas geográficas, latitud, longitud
+- Ubicaciones de lugares, ciudades, países
+- Búsquedas de servicios y establecimientos en zonas específicas (gasolineras, restaurantes, hoteles, etc.)
+- Distancias y rutas entre lugares
+- Información sobre mapa, geografía y localización
+Si la pregunta no está relacionada con geografía o ubicaciones, responde: 'Lo siento, solo puedo ayudarte con consultas relacionadas con ubicaciones y geografía.'
+
+Información adicional a considerar: ${systemInfo}`
+            : `Eres un asistente especializado en información geográfica y ubicaciones. Puedes responder preguntas sobre:
+- Coordenadas geográficas, latitud, longitud
+- Ubicaciones de lugares, ciudades, países
+- Búsquedas de servicios y establecimientos en zonas específicas (gasolineras, restaurantes, hoteles, etc.)
+- Distancias y rutas entre lugares
+- Información sobre mapa, geografía y localización
+Si la pregunta no está relacionada con geografía o ubicaciones, responde: 'Lo siento, solo puedo ayudarte con consultas relacionadas con ubicaciones y geografía.'`;
+
         const resposta = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-4.1-mini",
             messages: [
                 {
                     "role": "system",
-                    "content": "Eres un asistente especializado en coordenadas geográficas. Solo puedes responder preguntas relacionadas con coordenadas geográficas, latitud, longitud, ubicaciones, mapas, distancias geográficas, etc. Si la pregunta no está relacionada con coordenadas geográficas, debes responder: 'Lo siento, solo puedo ayudarte con consultas relacionadas con coordenadas geográficas.'"
+                    "content": systemMessage
                 },
                 {
                     "role": "user",

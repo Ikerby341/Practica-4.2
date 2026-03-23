@@ -9,7 +9,7 @@
     "noEmitOnError": true,
     "allowJs": false,
     "rootDir": ".",
-    "outDir": "../public"
+    "outDir": "../public/js",
   },
   "include": ["*.ts"]
 }
