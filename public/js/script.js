@@ -1,110 +1,148 @@
 "use strict";
-const input = document.getElementById('userInput');
-const bubble = document.getElementById('msgBubble');
-const msgText = document.getElementById('msgText');
-const mapFrame = document.getElementById('mapFrame');
-const sendBtn = document.getElementById('sendBtn');
-const roadmappill = document.getElementById('roadmap-pill');
-const satellitepill = document.getElementById('satellite-pill');
-const terrainpill = document.getElementById('terrain-pill');
-const systemInfoInput = document.getElementById('systemInfo');
-const saveSystemBtn = document.getElementById('saveSystemBtn');
-let currentMapType = 'roadmap';
-sendBtn.addEventListener('click', sendMessage);
-input.addEventListener('keydown', e => {
-    if (e.key === 'Enter')
-        sendMessage();
-});
-saveSystemBtn.addEventListener('click', saveSystemInfo);
-roadmappill.addEventListener('click', () => setView('roadmap', roadmappill));
-satellitepill.addEventListener('click', () => setView('satellite', satellitepill));
-terrainpill.addEventListener('click', () => setView('terrain', terrainpill));
-async function saveSystemInfo() {
-    const systemInfo = systemInfoInput.value.trim();
-    if (!systemInfo) {
-        alert('Por favor, introduce información del sistema');
+/// <reference types="leaflet" />
+// ─── Estado global ────────────────────────────────────────────────────────────
+let map = null;
+let markersLayer = null;
+// ─── Referencias DOM ──────────────────────────────────────────────────────────
+const input = document.getElementById("userInput");
+const bubble = document.getElementById("msgBubble");
+const msgText = document.getElementById("msgText");
+const mapContainer = document.getElementById("mapFrame");
+const sendBtn = document.getElementById("sendBtn");
+const saveSystemBtn = document.getElementById("saveSystemBtn");
+const systemInfoTA = document.getElementById("systemInfo");
+const roadmapPill = document.getElementById("roadmap-pill");
+const satellitePill = document.getElementById("satellite-pill");
+const terrainPill = document.getElementById("terrain-pill");
+// ─── Mapa ─────────────────────────────────────────────────────────────────────
+const tileUrls = {
+    roadmap: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    terrain: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+};
+const tileAttributions = {
+    roadmap: "© OpenStreetMap contributors",
+    satellite: "© Esri",
+    terrain: "© Esri",
+};
+function initMap() {
+    if (map)
         return;
-    }
+    map = L.map(mapContainer).setView([41.3874, 2.1686], 12);
+    L.tileLayer(tileUrls.roadmap, {
+        attribution: tileAttributions.roadmap,
+    }).addTo(map);
+    markersLayer = L.featureGroup().addTo(map);
+    setTimeout(() => map.invalidateSize(), 400);
+}
+function setView(type, el) {
+    document.querySelectorAll(".map-pill").forEach((p) => p.classList.remove("active"));
+    el.classList.add("active");
+    if (!map)
+        return;
+    map.eachLayer((l) => {
+        if (l instanceof L.TileLayer)
+            map.removeLayer(l);
+    });
+    L.tileLayer(tileUrls[type], {
+        attribution: tileAttributions[type],
+    }).addTo(map);
+}
+// ─── Geocodificación ──────────────────────────────────────────────────────────
+async function geocodeLocation(location) {
     try {
-        const response = await fetch('/system-info', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ systemInfo })
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
+        const response = await fetch(url, {
+            headers: { "User-Agent": "ExplorerApp/1.0" },
         });
-        if (response.ok) {
-            alert('Información del sistema guardada correctamente');
-            saveSystemBtn.textContent = '✓ Información guardada';
-            saveSystemBtn.style.background = 'rgba(200,255,87,0.4)';
-            setTimeout(() => {
-                saveSystemBtn.textContent = 'Guardar Información';
-                saveSystemBtn.style.background = 'rgba(200,255,87,0.2)';
-            }, 2000);
-        }
-        else {
-            alert('Error al guardar la información del sistema');
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+            return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
         }
     }
-    catch (error) {
-        alert('Error de conexión: ' + error);
+    catch (e) {
+        console.error("Error geocodificando:", location, e);
+    }
+    return null;
+}
+// ─── Guardar system info ──────────────────────────────────────────────────────
+async function saveSystemInfo() {
+    const systemInfo = systemInfoTA.value.trim();
+    try {
+        await fetch("/system-info", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ systemInfo }),
+        });
+    }
+    catch (e) {
+        console.error("Error guardando system info:", e);
     }
 }
+// ─── Envío de mensaje ─────────────────────────────────────────────────────────
 async function sendMessage() {
     const val = input.value.trim();
     if (!val)
         return;
-    // Show message bubble
-    msgText.textContent = val;
-    bubble.classList.remove('visible');
-    void bubble.offsetWidth; // reflow for re-animation
-    bubble.classList.add('visible');
-    // Send question to server
+    msgText.textContent = "Buscando...";
+    bubble.classList.add("visible");
+    sendBtn.disabled = true;
     try {
-        const response = await fetch('/consulta', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ pregunta: val })
+        const response = await fetch("/consulta", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pregunta: val }),
         });
-        if (response.ok) {
-            const data = await response.json();
-            const resposta = data.resposta;
-            if (resposta.includes('Lo siento, solo puedo ayudarte con consultas relacionadas con ubicaciones')) {
-                msgText.textContent = resposta;
-                mapFrame.src = `https://maps.google.com/maps?q=Barcelona,España&output=embed&z=13&maptype=${currentMapType}`;
+        const data = await response.json();
+        if (!response.ok)
+            throw new Error(data.error ?? `Error ${response.status}`);
+        msgText.textContent = data.resposta;
+        if (data.ubicaciones && data.ubicaciones.length > 0) {
+            const layer = markersLayer;
+            if (!layer)
                 return;
+            layer.clearLayers();
+            const coordsFound = [];
+            for (const locName of data.ubicaciones) {
+                const coords = await geocodeLocation(locName);
+                if (coords) {
+                    coordsFound.push(coords);
+                    L.circleMarker([coords.lat, coords.lon], {
+                        radius: 10,
+                        fillColor: "#c8ff57",
+                        color: "#000",
+                        weight: 2,
+                        fillOpacity: 0.9,
+                    })
+                        .addTo(layer)
+                        .bindPopup(`<b>${locName}</b>`);
+                }
             }
-            // Update map with the response (which might contain a location)
-            const encoded = encodeURIComponent(resposta);
-            mapFrame.src = `https://maps.google.com/maps?q=${encoded}&output=embed&z=13&maptype=${currentMapType}`;
-            // Update message with the response
-            msgText.textContent = resposta;
-        }
-        else {
-            const errorData = await response.json();
-            msgText.textContent = 'Error: ' + (errorData.error || 'Unknown error');
+            if (coordsFound.length > 0 && map) {
+                map.invalidateSize();
+                const bounds = layer.getBounds();
+                if (bounds.isValid()) {
+                    map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                }
+            }
         }
     }
     catch (error) {
-        msgText.textContent = 'Error de conexión: ' + error;
+        console.error(error);
+        msgText.textContent = "Error: " + (error instanceof Error ? error.message : String(error));
     }
-    input.value = '';
-    input.focus();
+    input.value = "";
+    sendBtn.disabled = false;
 }
-function setView(type, el) {
-    currentMapType = type;
-    document.querySelectorAll('.map-pill').forEach(p => p.classList.remove('active'));
-    el.classList.add('active');
-    // Reload map with new type if there's content in bubble
-    const current = msgText.textContent;
-    if (current) {
-        const encoded = encodeURIComponent(current);
-        mapFrame.src = `https://maps.google.com/maps?q=${encoded}&output=embed&z=13&maptype=${type}`;
-    }
-    else {
-        // If no current location, just set map type for future queries
-        mapFrame.src = `https://maps.google.com/maps?q=Barcelona,España&output=embed&z=13&maptype=${type}`;
-    }
-}
+// ─── Eventos ──────────────────────────────────────────────────────────────────
+sendBtn.addEventListener("click", sendMessage);
+saveSystemBtn.addEventListener("click", saveSystemInfo);
+input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter")
+        sendMessage();
+});
+roadmapPill.addEventListener("click", () => setView("roadmap", roadmapPill));
+satellitePill.addEventListener("click", () => setView("satellite", satellitePill));
+terrainPill.addEventListener("click", () => setView("terrain", terrainPill));
+// ─── Arranque ─────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", initMap);

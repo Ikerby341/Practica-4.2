@@ -6,6 +6,9 @@
   <title>Explorer</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="styles.css"/>
+  <!-- Leaflet CSS para el mapa -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="js/script.js" defer></script>
 </head>
 <body>
@@ -73,13 +76,7 @@
       </div>
     </div>
     <div class="map-frame-wrapper">
-      <iframe
-        id="mapFrame"
-        src="https://maps.google.com/maps?q=Barcelona,España&output=embed&z=13"
-        allowfullscreen
-        loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade"
-      ></iframe>
+      <div id="mapFrame"></div>
     </div>
   </section>
 

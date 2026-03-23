@@ -450,6 +450,18 @@ body::after {
   filter: saturate(0.8) brightness(0.9) contrast(1.05);
 }
 
+#mapFrame {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: none;
+  border-radius: 16px;
+}
+
+.leaflet-container {
+  background: var(--surface) !important;
+}
+
 /* ── Animations ── */
 @keyframes fadeDown {
   from { opacity: 0; transform: translateY(-16px); }
@@ -469,4 +481,13 @@ body::after {
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+.map-frame-wrapper::before, 
+.map-frame-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* ESTO PERMITE CLICAR EL MAPA */
+  z-index: 10;
 }
