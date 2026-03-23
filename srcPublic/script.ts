@@ -76,6 +76,12 @@ const input = document.getElementById('userInput') as HTMLInputElement;
       if (response.ok) {
         const data = await response.json();
         const resposta = data.resposta;
+
+        if (resposta.includes('Lo siento, solo puedo ayudarte con consultas relacionadas con ubicaciones')) {
+          msgText.textContent = resposta;
+          mapFrame.src = `https://maps.google.com/maps?q=Barcelona,España&output=embed&z=13&maptype=${currentMapType}`;
+          return;
+        }
         
         // Update map with the response (which might contain a location)
         const encoded = encodeURIComponent(resposta);
