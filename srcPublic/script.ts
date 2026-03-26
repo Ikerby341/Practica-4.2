@@ -2,15 +2,17 @@
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-interface ConsultaResponse {
-  resposta: string;
-  ubicaciones: string[];
-  error?: string;
-}
-
-interface Coords {
+interface Ubicacion {
+  nombre: string;
   lat: number;
   lon: number;
+  info: string | null;
+}
+
+interface ConsultaResponse {
+  resposta: string;
+  ubicaciones: Ubicacion[];
+  error?: string;
 }
 
 type MapType = "roadmap" | "satellite" | "terrain";
@@ -22,16 +24,16 @@ let markersLayer: L.FeatureGroup | null = null;
 
 // ─── Referencias DOM ──────────────────────────────────────────────────────────
 
-const input         = document.getElementById("userInput")       as HTMLInputElement;
-const bubble        = document.getElementById("msgBubble")       as HTMLElement;
-const msgText       = document.getElementById("msgText")         as HTMLElement;
-const mapContainer  = document.getElementById("mapFrame")        as HTMLElement;
-const sendBtn       = document.getElementById("sendBtn")         as HTMLButtonElement;
-const saveSystemBtn = document.getElementById("saveSystemBtn")   as HTMLButtonElement;
-const systemInfoTA  = document.getElementById("systemInfo")      as HTMLTextAreaElement;
-const roadmapPill   = document.getElementById("roadmap-pill")    as HTMLElement;
-const satellitePill = document.getElementById("satellite-pill")  as HTMLElement;
-const terrainPill   = document.getElementById("terrain-pill")    as HTMLElement;
+const input         = document.getElementById("userInput")      as HTMLInputElement;
+const bubble        = document.getElementById("msgBubble")      as HTMLElement;
+const msgText       = document.getElementById("msgText")        as HTMLElement;
+const mapContainer  = document.getElementById("mapFrame")       as HTMLElement;
+const sendBtn       = document.getElementById("sendBtn")        as HTMLButtonElement;
+const saveSystemBtn = document.getElementById("saveSystemBtn")  as HTMLButtonElement;
+const systemInfoTA  = document.getElementById("systemInfo")     as HTMLTextAreaElement;
+const roadmapPill   = document.getElementById("roadmap-pill")   as HTMLElement;
+const satellitePill = document.getElementById("satellite-pill") as HTMLElement;
+const terrainPill   = document.getElementById("terrain-pill")   as HTMLElement;
 
 // ─── Mapa ─────────────────────────────────────────────────────────────────────
 
@@ -49,60 +51,57 @@ const tileAttributions: Record<MapType, string> = {
 
 function initMap(): void {
   if (map) return;
-
   map = L.map(mapContainer).setView([41.3874, 2.1686], 12);
-
-  L.tileLayer(tileUrls.roadmap, {
-    attribution: tileAttributions.roadmap,
-  }).addTo(map);
-
+  L.tileLayer(tileUrls.roadmap, { attribution: tileAttributions.roadmap }).addTo(map);
   markersLayer = L.featureGroup().addTo(map);
-
   setTimeout(() => map!.invalidateSize(), 400);
 }
 
 function setView(type: MapType, el: HTMLElement): void {
   document.querySelectorAll(".map-pill").forEach((p) => p.classList.remove("active"));
   el.classList.add("active");
-
   if (!map) return;
-
-  map.eachLayer((l: L.Layer) => {
-    if (l instanceof L.TileLayer) map!.removeLayer(l);
-  });
-
-  L.tileLayer(tileUrls[type], {
-    attribution: tileAttributions[type],
-  }).addTo(map);
+  map.eachLayer((l: L.Layer) => { if (l instanceof L.TileLayer) map!.removeLayer(l); });
+  L.tileLayer(tileUrls[type], { attribution: tileAttributions[type] }).addTo(map);
 }
 
-// ─── Geocodificación ──────────────────────────────────────────────────────────
+// ─── Marcadores ───────────────────────────────────────────────────────────────
 
-async function geocodeLocation(location: string): Promise<Coords | null> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
-    const response = await fetch(url, {
-      headers: { "User-Agent": "ExplorerApp/1.0" },
-    });
-    const data = await response.json();
-    if (Array.isArray(data) && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-    }
-  } catch (e) {
-    console.error("Error geocodificando:", location, e);
+function pintarMarcadores(ubicaciones: Ubicacion[]): void {
+  const layer = markersLayer;
+  if (!layer || !map) return;
+
+  layer.clearLayers();
+
+  for (const ub of ubicaciones) {
+    const popup = ub.info
+      ? `<b>${ub.nombre}</b><br><small>${ub.info}</small>`
+      : `<b>${ub.nombre}</b>`;
+
+    L.circleMarker([ub.lat, ub.lon], {
+      radius: 10,
+      fillColor: "#c8ff57",
+      color: "#000",
+      weight: 2,
+      fillOpacity: 0.9,
+    }).addTo(layer).bindPopup(popup);
   }
-  return null;
+
+  map.invalidateSize();
+  const bounds = layer.getBounds();
+  if (bounds.isValid()) {
+    map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+  }
 }
 
 // ─── Guardar system info ──────────────────────────────────────────────────────
 
 async function saveSystemInfo(): Promise<void> {
-  const systemInfo = systemInfoTA.value.trim();
   try {
     await fetch("/system-info", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ systemInfo }),
+      body: JSON.stringify({ systemInfo: systemInfoTA.value.trim() }),
     });
   } catch (e) {
     console.error("Error guardando system info:", e);
@@ -132,35 +131,7 @@ async function sendMessage(): Promise<void> {
     msgText.textContent = data.resposta;
 
     if (data.ubicaciones && data.ubicaciones.length > 0) {
-      const layer = markersLayer;
-      if (!layer) return;
-
-      layer.clearLayers();
-      const coordsFound: Coords[] = [];
-
-      for (const locName of data.ubicaciones) {
-        const coords = await geocodeLocation(locName);
-        if (coords) {
-          coordsFound.push(coords);
-          L.circleMarker([coords.lat, coords.lon], {
-            radius: 10,
-            fillColor: "#c8ff57",
-            color: "#000",
-            weight: 2,
-            fillOpacity: 0.9,
-          })
-            .addTo(layer)
-            .bindPopup(`<b>${locName}</b>`);
-        }
-      }
-
-      if (coordsFound.length > 0 && map) {
-        map.invalidateSize();
-        const bounds = layer.getBounds();
-        if (bounds.isValid()) {
-          map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-        }
-      }
+      pintarMarcadores(data.ubicaciones);
     }
   } catch (error) {
     console.error(error);
@@ -175,9 +146,7 @@ async function sendMessage(): Promise<void> {
 
 sendBtn.addEventListener("click", sendMessage);
 saveSystemBtn.addEventListener("click", saveSystemInfo);
-input.addEventListener("keydown", (e: KeyboardEvent) => {
-  if (e.key === "Enter") sendMessage();
-});
+input.addEventListener("keydown", (e: KeyboardEvent) => { if (e.key === "Enter") sendMessage(); });
 
 roadmapPill.addEventListener("click",   () => setView("roadmap",   roadmapPill));
 satellitePill.addEventListener("click", () => setView("satellite", satellitePill));

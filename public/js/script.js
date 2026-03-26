@@ -29,9 +29,7 @@ function initMap() {
     if (map)
         return;
     map = L.map(mapContainer).setView([41.3874, 2.1686], 12);
-    L.tileLayer(tileUrls.roadmap, {
-        attribution: tileAttributions.roadmap,
-    }).addTo(map);
+    L.tileLayer(tileUrls.roadmap, { attribution: tileAttributions.roadmap }).addTo(map);
     markersLayer = L.featureGroup().addTo(map);
     setTimeout(() => map.invalidateSize(), 400);
 }
@@ -40,39 +38,41 @@ function setView(type, el) {
     el.classList.add("active");
     if (!map)
         return;
-    map.eachLayer((l) => {
-        if (l instanceof L.TileLayer)
-            map.removeLayer(l);
-    });
-    L.tileLayer(tileUrls[type], {
-        attribution: tileAttributions[type],
-    }).addTo(map);
+    map.eachLayer((l) => { if (l instanceof L.TileLayer)
+        map.removeLayer(l); });
+    L.tileLayer(tileUrls[type], { attribution: tileAttributions[type] }).addTo(map);
 }
-// ─── Geocodificación ──────────────────────────────────────────────────────────
-async function geocodeLocation(location) {
-    try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
-        const response = await fetch(url, {
-            headers: { "User-Agent": "ExplorerApp/1.0" },
-        });
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-            return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-        }
+// ─── Marcadores ───────────────────────────────────────────────────────────────
+function pintarMarcadores(ubicaciones) {
+    const layer = markersLayer;
+    if (!layer || !map)
+        return;
+    layer.clearLayers();
+    for (const ub of ubicaciones) {
+        const popup = ub.info
+            ? `<b>${ub.nombre}</b><br><small>${ub.info}</small>`
+            : `<b>${ub.nombre}</b>`;
+        L.circleMarker([ub.lat, ub.lon], {
+            radius: 10,
+            fillColor: "#c8ff57",
+            color: "#000",
+            weight: 2,
+            fillOpacity: 0.9,
+        }).addTo(layer).bindPopup(popup);
     }
-    catch (e) {
-        console.error("Error geocodificando:", location, e);
+    map.invalidateSize();
+    const bounds = layer.getBounds();
+    if (bounds.isValid()) {
+        map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
-    return null;
 }
 // ─── Guardar system info ──────────────────────────────────────────────────────
 async function saveSystemInfo() {
-    const systemInfo = systemInfoTA.value.trim();
     try {
         await fetch("/system-info", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ systemInfo }),
+            body: JSON.stringify({ systemInfo: systemInfoTA.value.trim() }),
         });
     }
     catch (e) {
@@ -98,33 +98,7 @@ async function sendMessage() {
             throw new Error(data.error ?? `Error ${response.status}`);
         msgText.textContent = data.resposta;
         if (data.ubicaciones && data.ubicaciones.length > 0) {
-            const layer = markersLayer;
-            if (!layer)
-                return;
-            layer.clearLayers();
-            const coordsFound = [];
-            for (const locName of data.ubicaciones) {
-                const coords = await geocodeLocation(locName);
-                if (coords) {
-                    coordsFound.push(coords);
-                    L.circleMarker([coords.lat, coords.lon], {
-                        radius: 10,
-                        fillColor: "#c8ff57",
-                        color: "#000",
-                        weight: 2,
-                        fillOpacity: 0.9,
-                    })
-                        .addTo(layer)
-                        .bindPopup(`<b>${locName}</b>`);
-                }
-            }
-            if (coordsFound.length > 0 && map) {
-                map.invalidateSize();
-                const bounds = layer.getBounds();
-                if (bounds.isValid()) {
-                    map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-                }
-            }
+            pintarMarcadores(data.ubicaciones);
         }
     }
     catch (error) {
@@ -137,10 +111,8 @@ async function sendMessage() {
 // ─── Eventos ──────────────────────────────────────────────────────────────────
 sendBtn.addEventListener("click", sendMessage);
 saveSystemBtn.addEventListener("click", saveSystemInfo);
-input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter")
-        sendMessage();
-});
+input.addEventListener("keydown", (e) => { if (e.key === "Enter")
+    sendMessage(); });
 roadmapPill.addEventListener("click", () => setView("roadmap", roadmapPill));
 satellitePill.addEventListener("click", () => setView("satellite", satellitePill));
 terrainPill.addEventListener("click", () => setView("terrain", terrainPill));
