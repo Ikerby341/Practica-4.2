@@ -90,7 +90,7 @@ app.post('/consulta', async (req, res) => {
     const prompt = promptTemplate.replace('${systemInfo}', systemInfo);
     try {
         const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-4.1",
             messages: [
                 { role: "system", content: prompt },
                 { role: "user", content: pregunta }
