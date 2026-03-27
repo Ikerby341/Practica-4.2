@@ -8,7 +8,7 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 let systemInfo = '';
 app.use(express.json());
 app.use(express.static('public'));
@@ -86,7 +86,7 @@ app.post('/consulta', async (req, res) => {
             ubicaciones: [{ nombre: `Coordenadas directas`, lat: coordsDirectas.lat, lon: coordsDirectas.lon, info: null }]
         });
     }
-    const promptTemplate = fs.readFileSync('server/prompt.txt', 'utf8');
+    const promptTemplate = fs.readFileSync(new URL('prompt.txt', import.meta.url), 'utf8');
     const prompt = promptTemplate.replace('${systemInfo}', systemInfo);
     try {
         const completion = await openai.chat.completions.create({
