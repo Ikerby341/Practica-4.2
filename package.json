@@ -2,7 +2,8 @@
   "type": "module",
   "scripts": {
     "start": "node server/server.js",
-    "build-public": "tsc -p srcPublic/tsconfig.json"
+    "build-public": "tsc -p srcPublic/tsconfig.json",
+    "build-server": "npm run build-public"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
