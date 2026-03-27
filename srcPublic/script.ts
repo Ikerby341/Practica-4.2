@@ -21,6 +21,7 @@ type MapType = "roadmap" | "satellite" | "terrain";
 
 let map: L.Map | null = null;
 let markersLayer: L.FeatureGroup | null = null;
+let dotsInterval: any = null;
 
 // ─── Referencias DOM ──────────────────────────────────────────────────────────
 
@@ -108,13 +109,32 @@ async function saveSystemInfo(): Promise<void> {
   }
 }
 
+// ─── Animar puntos suspensivos ───────────────────────────────────────────────
+
+function startLoadingDots(): void {
+  let dotCount = 0;
+  msgText.textContent = "Buscando";
+  
+  dotsInterval = setInterval(() => {
+    dotCount = (dotCount + 1) % 4;
+    msgText.textContent = "Buscando" + ".".repeat(dotCount);
+  }, 350);
+}
+
+function stopLoadingDots(): void {
+  if (dotsInterval) {
+    clearInterval(dotsInterval);
+    dotsInterval = null;
+  }
+}
+
 // ─── Envío de mensaje ─────────────────────────────────────────────────────────
 
 async function sendMessage(): Promise<void> {
   const val = input.value.trim();
   if (!val) return;
 
-  msgText.textContent = "Buscando...";
+  startLoadingDots();
   bubble.classList.add("visible");
   sendBtn.disabled = true;
 
@@ -127,7 +147,8 @@ async function sendMessage(): Promise<void> {
 
     const data: ConsultaResponse = await response.json();
     if (!response.ok) throw new Error(data.error ?? `Error ${response.status}`);
-
+    
+    stopLoadingDots();
     msgText.textContent = data.resposta;
 
     if (data.ubicaciones && data.ubicaciones.length > 0) {
@@ -135,6 +156,7 @@ async function sendMessage(): Promise<void> {
     }
   } catch (error) {
     console.error(error);
+    stopLoadingDots();
     msgText.textContent = "Error: " + (error instanceof Error ? error.message : String(error));
   }
 

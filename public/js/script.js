@@ -3,6 +3,7 @@
 // ─── Estado global ────────────────────────────────────────────────────────────
 let map = null;
 let markersLayer = null;
+let dotsInterval = null;
 // ─── Referencias DOM ──────────────────────────────────────────────────────────
 const input = document.getElementById("userInput");
 const bubble = document.getElementById("msgBubble");
@@ -79,12 +80,27 @@ async function saveSystemInfo() {
         console.error("Error guardando system info:", e);
     }
 }
+// ─── Animar puntos suspensivos ───────────────────────────────────────────────
+function startLoadingDots() {
+    let dotCount = 0;
+    msgText.textContent = "Buscando";
+    dotsInterval = setInterval(() => {
+        dotCount = (dotCount + 1) % 4;
+        msgText.textContent = "Buscando" + ".".repeat(dotCount);
+    }, 350);
+}
+function stopLoadingDots() {
+    if (dotsInterval) {
+        clearInterval(dotsInterval);
+        dotsInterval = null;
+    }
+}
 // ─── Envío de mensaje ─────────────────────────────────────────────────────────
 async function sendMessage() {
     const val = input.value.trim();
     if (!val)
         return;
-    msgText.textContent = "Buscando...";
+    startLoadingDots();
     bubble.classList.add("visible");
     sendBtn.disabled = true;
     try {
@@ -96,6 +112,7 @@ async function sendMessage() {
         const data = await response.json();
         if (!response.ok)
             throw new Error(data.error ?? `Error ${response.status}`);
+        stopLoadingDots();
         msgText.textContent = data.resposta;
         if (data.ubicaciones && data.ubicaciones.length > 0) {
             pintarMarcadores(data.ubicaciones);
@@ -103,6 +120,7 @@ async function sendMessage() {
     }
     catch (error) {
         console.error(error);
+        stopLoadingDots();
         msgText.textContent = "Error: " + (error instanceof Error ? error.message : String(error));
     }
     input.value = "";
